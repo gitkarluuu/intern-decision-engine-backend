@@ -44,33 +44,37 @@ public class DecisionEngine {
             return new Decision(null, null, e.getMessage());
         }
 
-        int outputLoanAmount;
+        int outputLoanAmount = DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT;
         creditModifier = getCreditModifier(personalCode);
 
         if (creditModifier == 0) {
             throw new NoValidLoanException("No valid loan found!");
         }
 
-        while (highestValidLoanAmount(loanPeriod) < DecisionEngineConstants.MINIMUM_LOAN_AMOUNT) {
-            loanPeriod++;
+        while (!isLoanApproved(loanPeriod, outputLoanAmount)) {
+            outputLoanAmount -= 100;
+            //If a suitable loan amount is not found within the selected period
+            //the decision engine tries to find a new suitable period.
+            if (outputLoanAmount < DecisionEngineConstants.MINIMUM_LOAN_AMOUNT) {
+                if (loanPeriod == DecisionEngineConstants.MAXIMUM_LOAN_PERIOD) {
+                    throw new NoValidLoanException("No valid loan found!");
+                }
+                loanPeriod += 1;
+                outputLoanAmount = DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT;
+            }
         }
-
-        if (loanPeriod <= DecisionEngineConstants.MAXIMUM_LOAN_PERIOD) {
-            outputLoanAmount = Math.min(DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT, highestValidLoanAmount(loanPeriod));
-        } else {
-            throw new NoValidLoanException("No valid loan found!");
-        }
-
         return new Decision(outputLoanAmount, loanPeriod, null);
     }
 
     /**
-     * Calculates the largest valid loan for the current credit modifier and loan period.
-     *
-     * @return Largest valid loan amount
+     * Checks if the loan would be approved with given loan period and amount.
+     * @param loanPeriod period of the loan.
+     * @param loanAmount amount of the loan.
+     * @return True if approved, false if not approved.
      */
-    private int highestValidLoanAmount(int loanPeriod) {
-        return creditModifier * loanPeriod;
+    private boolean isLoanApproved(int loanPeriod, long loanAmount) {
+        double creditScore = ((double) creditModifier / loanAmount) * loanPeriod / 10;
+        return creditScore >= 0.1;
     }
 
     /**
@@ -114,12 +118,12 @@ public class DecisionEngine {
         if (!validator.isValid(personalCode)) {
             throw new InvalidPersonalCodeException("Invalid personal ID code!");
         }
-        if (!(DecisionEngineConstants.MINIMUM_LOAN_AMOUNT <= loanAmount)
-                || !(loanAmount <= DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT)) {
+        if (DecisionEngineConstants.MINIMUM_LOAN_AMOUNT > loanAmount
+                || loanAmount > DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT) {
             throw new InvalidLoanAmountException("Invalid loan amount!");
         }
-        if (!(DecisionEngineConstants.MINIMUM_LOAN_PERIOD <= loanPeriod)
-                || !(loanPeriod <= DecisionEngineConstants.MAXIMUM_LOAN_PERIOD)) {
+        if (DecisionEngineConstants.MINIMUM_LOAN_PERIOD > loanPeriod
+                || loanPeriod > DecisionEngineConstants.MAXIMUM_LOAN_PERIOD) {
             throw new InvalidLoanPeriodException("Invalid loan period!");
         }
 
