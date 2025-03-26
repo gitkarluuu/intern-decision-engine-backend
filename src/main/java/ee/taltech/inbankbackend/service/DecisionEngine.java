@@ -2,11 +2,11 @@ package ee.taltech.inbankbackend.service;
 
 import com.github.vladislavgoltjajev.personalcode.locale.estonia.EstonianPersonalCodeValidator;
 import ee.taltech.inbankbackend.config.DecisionEngineConstants;
-import ee.taltech.inbankbackend.exceptions.InvalidLoanAmountException;
-import ee.taltech.inbankbackend.exceptions.InvalidLoanPeriodException;
-import ee.taltech.inbankbackend.exceptions.InvalidPersonalCodeException;
-import ee.taltech.inbankbackend.exceptions.NoValidLoanException;
+import ee.taltech.inbankbackend.exceptions.*;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.time.Period;
 
 /**
  * A service class that provides a method for calculating an approved loan amount and period for a customer.
@@ -37,11 +37,15 @@ public class DecisionEngine {
      */
     public Decision calculateApprovedLoan(String personalCode, Long loanAmount, int loanPeriod)
             throws InvalidPersonalCodeException, InvalidLoanAmountException, InvalidLoanPeriodException,
-            NoValidLoanException {
+            NoValidLoanException, InvalidAgeException {
         try {
             verifyInputs(personalCode, loanAmount, loanPeriod);
         } catch (Exception e) {
             return new Decision(null, null, e.getMessage());
+        }
+
+        if (!isValidAge(personalCode)) {
+            throw new InvalidAgeException("Invalid age!");
         }
 
         int outputLoanAmount = DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT;
@@ -99,6 +103,32 @@ public class DecisionEngine {
         }
 
         return DecisionEngineConstants.SEGMENT_3_CREDIT_MODIFIER;
+    }
+
+    /**
+     * Calculates the age of the customer to according to their ID code. Finally checks if it is valid.
+     * @param personalCode ID code of the customer that made the request.
+     * @return true, if is valid, false, if is not valid.
+     */
+    private boolean isValidAge(String personalCode) {
+        char firstDigit = personalCode.charAt(0);
+        String year = personalCode.substring(1, 3);
+        String month = personalCode.substring(3, 5);
+        String day = personalCode.substring(5, 7);
+
+        int century = switch (firstDigit) {
+            case '1', '2' -> 1800;
+            case '3', '4' -> 1900;
+            case '5', '6' -> 2000;
+            case '7', '8' -> 2100;
+            default -> 0;
+        };
+        int birthYear = century + Integer.parseInt(year);
+        LocalDate birthDate = LocalDate.of(birthYear, Integer.parseInt(month), Integer.parseInt(day));
+        LocalDate currentDate = LocalDate.now();
+
+        int age = Period.between(birthDate, currentDate).getYears();
+        return age >= DecisionEngineConstants.MINIMUM_AGE && age <= DecisionEngineConstants.MAXIMUM_AGE;
     }
 
     /**
